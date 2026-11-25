@@ -1,0 +1,78 @@
+# Dependencies
+node_modules/
+bower_components/
+
+# Build and distribution output
+dist/
+build/
+out/
+release/
+*.crx
+*.zip
+
+# Local development and environment files
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs and debug output
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test and coverage output
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# Temporary files
+.tmp/
+tmp/
+.temp/
+.cache/
+.eslintcache
+.stylelintcache
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Operating system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# IDE and editor settings
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.iml
+*.sln
+*.user
+*.userossc
+*.suo
+
+# Chrome extension unpacked runtime data
+_extensions/
+extensions/
+chrome-profile/
+chromium-profile/
+
+# Generated documentation previews
+*.pdf
+*.html.bak
+
+*.zip
+

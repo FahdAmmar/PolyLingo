@@ -1,0 +1,92 @@
+{
+  "manifest_version": 3,
+  "name": "PolyLingo",
+  "description": "Dual subtitles for language learning on YouTube. Draggable subtitles, Focus reading with built-in player controls, scene navigation. Light, private, no tracking.",
+  "version": "0.0.0",
+  "minimum_chrome_version": "117",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "PolyLingo",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "commands": {
+    "toggle-focus-reading": {
+      "suggested_key": {
+        "default": "Alt+Shift+F"
+      },
+      "description": "Toggle Focus reading"
+    },
+    "previous-scene": {
+      "suggested_key": {
+        "default": "Alt+Shift+A"
+      },
+      "description": "Previous scene"
+    },
+    "next-scene": {
+      "suggested_key": {
+        "default": "Alt+Shift+D"
+      },
+      "description": "Next scene"
+    },
+    "repeat-scene": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Repeat the current scene"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "main-world.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "features/scene-timeline.js",
+        "features/layout-store.js",
+        "features/scene-controls.js",
+        "features/focus-prefs.js",
+        "features/virtual-list.js",
+        "features/transcript-search.js",
+        "features/auto-pause.js",
+        "features/track-cache.js",
+        "features/focus-dock.js",
+        "features/reading-panel.js",
+        "features/subtitle-dragger.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
