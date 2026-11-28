@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "PolyLingo",
-  "description": "Dual subtitles for language learning on YouTube. Draggable subtitles, Focus reading with built-in player controls, scene navigation. Light, private, no tracking.",
-  "version": "0.0.0",
+  "description": "Dual subtitles for language learning on YouTube. Draggable subtitles, Focus reading with built-in player controls, scene navigation and range looping. Light, private, no tracking.",
+  "version": "0.0.1",
   "minimum_chrome_version": "117",
   "icons": {
     "16": "icons/icon16.png",
@@ -73,6 +73,8 @@
         "features/scene-timeline.js",
         "features/layout-store.js",
         "features/scene-controls.js",
+        "features/range-loop.js",
+        "features/range-loop-controls.js",
         "features/focus-prefs.js",
         "features/virtual-list.js",
         "features/transcript-search.js",

@@ -1,78 +1,42 @@
 # Dependencies
 node_modules/
-bower_components/
 
-# Build and distribution output
+# Build and test output (keep the shipped extension files tracked unless generated locally)
 dist/
 build/
-out/
-release/
-*.crx
-*.zip
+coverage/
+.nyc_output/
 
-# Local development and environment files
-.env
-.env.*
-!.env.example
-*.local
-
-# Logs and debug output
-logs/
+# Logs and diagnostic output
 *.log
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
 
-# Test and coverage output
-coverage/
-.nyc_output/
-playwright-report/
-test-results/
+# Local environment variables and secrets
+.env
+.env.*
+!.env.example
 
-# Temporary files
-.tmp/
-tmp/
-.temp/
-.cache/
-.eslintcache
-.stylelintcache
-*.tmp
-*.temp
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
 *.swp
 *.swo
 *~
 
-# Operating system files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-Desktop.ini
-
-# IDE and editor settings
-.vscode/*
-!.vscode/settings.json
-!.vscode/extensions.json
-.idea/
-*.iml
-*.sln
-*.user
-*.userossc
-*.suo
-
-# Chrome extension unpacked runtime data
-_extensions/
-extensions/
-chrome-profile/
-chromium-profile/
-
-# Generated documentation previews
-*.pdf
-*.html.bak
-
+# Temporary files and archives
+.tmp/
+tmp/
+temp/
 *.zip
 
+# Browser unpacked-extension test/profile data
+.chrome-profile/
+.chromium-profile/
+
+# Optional local test artifacts
+playwright-report/
+test-results/

@@ -12,7 +12,10 @@
     !PL.HeightIndex ||
     !PL.TranscriptIndex ||
     !PL.AutoPause ||
-    !PL.getTrackCache
+    !PL.getTrackCache ||
+    !PL.RangeLoop ||
+    !PL.createRangeLoopControl ||
+    !PL.bindRangeLoopKeys
   ) {
     console.error(
       `[PolyLingo] feature modules are missing; content script not started`,
@@ -1031,6 +1034,7 @@
 ${PL.READING_PANEL_CSS}
 ${PL.SUBTITLE_DRAGGER_CSS}
 ${PL.FOCUS_DOCK_CSS}
+${PL.RANGE_LOOP_CSS}
 /* [PolyLingo 0.6] display modes, side, lite mode, dock offsets */
 :host([data-view="primary"]) .slot[data-line="secondary"] .line,
 :host([data-view="secondary"]) .slot[data-line="primary"] .line { display: none !important; }
@@ -1097,6 +1101,9 @@ ${PL.FOCUS_DOCK_CSS}
       secondaryLine;
       toolbar;
       sceneButtons;
+      rangeControl;
+      rangeHandler = null;
+      rangeState = { start: null, end: null, active: !1, wraps: 0 };
       resetButton;
       focusButton;
       panel;
@@ -1232,6 +1239,11 @@ ${PL.FOCUS_DOCK_CSS}
         this.sceneButtons = PL.createSceneButtons(n, {
           onAction: (action) => this.actionHandler?.(action),
         });
+        // [PolyLingo 0.7] Range loop: A / B marks, on-off, exact times.
+        this.rangeControl = PL.createRangeLoopControl(n, {
+          onAction: (action, payload) => this.rangeHandler?.(action, payload),
+          getNow: () => this.findVideo()?.currentTime ?? 0,
+        });
         this.resetButton = n.createElement(`button`);
         this.resetButton.className = `reset-button`;
         this.resetButton.type = `button`;
@@ -1244,6 +1256,7 @@ ${PL.FOCUS_DOCK_CSS}
         this.focusButton.setAttribute(`aria-label`, this.focusLabels.en.enter);
         this.focusButton.title = `Ctrl+Shift+F`;
         this.toolbar.append(
+          this.rangeControl.element,
           this.sceneButtons.element,
           this.resetButton,
           this.focusButton,
@@ -1352,6 +1365,11 @@ ${PL.FOCUS_DOCK_CSS}
           ? this.settings.learning.shortcutCodes
           : null;
         this.sceneButtons.update(this.uiLang, codes);
+        this.rangeControl.update(
+          this.uiLang,
+          this.rangeState,
+          codes ? PL.RANGE_LOOP_KEYS : null,
+        );
         this.panel.applyLabels(this.uiLang, codes);
         this.dragger.applyLabels(this.uiLang);
         this.dock.applyLabels(this.uiLang, codes, {
@@ -1384,6 +1402,17 @@ ${PL.FOCUS_DOCK_CSS}
       }
       setSceneActionHandler(e) {
         this.actionHandler = e;
+      }
+      // ---- [PolyLingo 0.7] range loop ----------------------------------------
+      setRangeActionHandler(handler) {
+        this.rangeHandler = handler;
+      }
+      setRangeLoopState(state) {
+        this.rangeState = state;
+        const codes = this.settings?.learning.shortcuts
+          ? PL.RANGE_LOOP_KEYS
+          : null;
+        this.rangeControl.update(this.uiLang, state, codes);
       }
       setScenes(e) {
         this.panel.setTimeline(e);
@@ -1443,7 +1472,7 @@ ${PL.FOCUS_DOCK_CSS}
         return panelDid;
       }
       isTyping() {
-        return this.dock.isTyping();
+        return this.dock.isTyping() || this.rangeControl.isTyping();
       }
       focusSearch() {
         this.focus && this.dock.focusSearch();
@@ -1860,6 +1889,7 @@ ${PL.FOCUS_DOCK_CSS}
         this.dock.destroy();
         this.panel.destroy();
         this.sceneButtons.destroy();
+        this.rangeControl.destroy();
         this.card?.close();
         this.resizeObserver?.disconnect();
         this.host.remove();
@@ -2591,6 +2621,7 @@ ${PL.FOCUS_DOCK_CSS}
     prefs = PL.defaultFocusPrefs();
     prefsTimer;
     autoPause = null;
+    rangeLoop = null;
     savedSerial = 0;
     captureWaiters = new Set();
     driverError = null;
@@ -2748,6 +2779,9 @@ ${PL.FOCUS_DOCK_CSS}
         r.setSceneActionHandler((e) => {
           this.practice && ut[e](this.practice);
         }),
+        r.setRangeActionHandler((action, payload) =>
+          this.onRangeAction(action, payload),
+        ),
         // [PolyLingo 0.5] scene times are already video time (offset applied).
         r.setReadingSeek((e) => {
           n.video.currentTime = Math.max(0, e);
@@ -2782,6 +2816,14 @@ ${PL.FOCUS_DOCK_CSS}
           (this.autoPause = new PL.AutoPause({
             video: n.video,
             getTimeline: () => this.timeline,
+          })),
+          // [PolyLingo 0.7] One range loop per video element; an ad owns the video, so it waits.
+          this.rangeLoop?.destroy(),
+          (this.rangeLoop = new PL.RangeLoop({
+            video: n.video,
+            onChange: (state, reason) => this.onRangeLoop(state, reason),
+            isSuspended: () =>
+              this.overlayContainer?.classList.contains(`ad-showing`) === !0,
           }))));
       let o = e ?? t;
       ((o?.index ?? null) !== this.practiceIndex &&
@@ -2794,6 +2836,8 @@ ${PL.FOCUS_DOCK_CSS}
         this.sync.setTracks(e?.index ?? null, t?.index ?? null),
         // [PolyLingo 0.6] A hidden tab does no subtitle work; onVisibility restarts it.
         document.hidden || this.sync.start(),
+        // The overlay may be a new one around the same video: show the loop that is running.
+        r.setRangeLoopState(this.rangeLoop.snapshot()),
         this.applyAutoPause(),
         this.syncKeys(),
         this.syncLookup());
@@ -2953,6 +2997,8 @@ ${PL.FOCUS_DOCK_CSS}
     onPractice(e) {
       let t = w(this.settings.uiLanguage, navigator.language);
       this.overlay?.toast(ot(t, e, this.practice?.loopRate ?? 1));
+      // One loop at a time: the sentence loop takes over from the range loop.
+      e === `loop-on` && this.rangeLoop?.deactivate();
       (e === `loop-on` || e === `loop-off`) &&
         this.overlay?.dock.setLoop(e === `loop-on`);
     }
@@ -3006,7 +3052,111 @@ ${PL.FOCUS_DOCK_CSS}
       cache && (cache.enabled = this.prefs.cacheTracks);
     }
     applyAutoPause() {
-      this.autoPause?.setEnabled(this.prefs.autoPause && !document.hidden);
+      // "Pause after each sentence" would cut a range loop short, so it waits while a loop runs.
+      this.autoPause?.setEnabled(
+        this.prefs.autoPause &&
+          !document.hidden &&
+          this.rangeLoop?.active !== !0,
+      );
+    }
+    // ---- [PolyLingo 0.7] range loop -------------------------------------------
+    /** What the A / B marks capture: the edge of the scene on screen, else the exact playback time. */
+    markTime(edge) {
+      const scene =
+        this.timeline && this.activeSceneIndex >= 0
+          ? this.timeline.cueAtIndex(this.activeSceneIndex)
+          : null;
+      return scene
+        ? edge === `start`
+          ? scene.startTime
+          : scene.endTime
+        : (this.syncVideo?.currentTime ?? 0);
+    }
+    /** A / B marks, on-off, clear, and exact times from the editor. Returns a result for the editor. */
+    onRangeAction(action, payload) {
+      const loop = this.rangeLoop,
+        overlay = this.overlay,
+        video = this.syncVideo;
+      if (!loop || !overlay || !video) return { ok: !1, reason: `unavailable` };
+      const language = w(this.settings.uiLanguage, navigator.language),
+        say = (key, detail) =>
+          overlay.toast(PL.rangeLoopText(language, key, detail)),
+        sayOn = () => say(`on`, PL.formatRange(loop.start, loop.end));
+      if (action === `markStart` || action === `markEnd`) {
+        const isStart = action === `markStart`,
+          time = this.markTime(isStart ? `start` : `end`),
+          result = isStart ? loop.setStart(time) : loop.setEnd(time);
+        if (!result.ok) {
+          say(result.reason);
+          return result;
+        }
+        if (loop.hasRange) {
+          loop.activate();
+          sayOn();
+        } else say(isStart ? `startSet` : `endSet`, PL.formatTime(time));
+        return result;
+      }
+      if (action === `toggle`) {
+        if (loop.active) {
+          loop.deactivate();
+          say(`off`);
+        } else if (loop.activate().ok) sayOn();
+        else say(`needRange`);
+        return { ok: !0 };
+      }
+      if (action === `clear`) {
+        loop.clear();
+        say(`cleared`);
+        return { ok: !0 };
+      }
+      if (action === `apply`) {
+        // Empty start = the beginning, empty end = the end of the video.
+        const end = payload?.end ?? (Number.isFinite(video.duration) ? video.duration : null);
+        if (end === null) return { ok: !1, reason: `invalid` };
+        const result = loop.setRange(payload?.start ?? 0, end);
+        if (result.ok) {
+          loop.activate();
+          sayOn();
+        }
+        return result;
+      }
+      return { ok: !1, reason: `invalid` };
+    }
+    onRangeLoop(state, reason) {
+      const overlay = this.overlay;
+      if (!overlay) return;
+      overlay.setRangeLoopState(state);
+      if (reason === `wrap`) return;
+      if (reason === `activated`) {
+        // One loop at a time: the range loop takes over from the sentence loop.
+        this.practice?.reset();
+        overlay.dock.setLoop(!1);
+      }
+      this.applyAutoPause();
+      reason === `left` &&
+        overlay.toast(
+          PL.rangeLoopText(
+            w(this.settings.uiLanguage, navigator.language),
+            `left`,
+          ),
+        );
+    }
+    bindRangeKeys() {
+      PL.bindRangeLoopKeys({
+        signal: this.keys.signal,
+        enabled: () => this.settings.enabled && this.settings.learning.shortcuts,
+        isTyping: () => this.overlay?.isTyping() ?? !1,
+        // A code the viewer assigned to another PolyLingo action keeps that meaning.
+        reserved: () => [
+          ...Object.values(this.settings.learning.shortcutCodes),
+          ...Object.values(this.prefs.keys),
+        ],
+        handlers: {
+          markStart: () => void this.onRangeAction(`markStart`),
+          markEnd: () => void this.onRangeAction(`markEnd`),
+          toggle: () => void this.onRangeAction(`toggle`),
+        },
+      });
     }
     bindFocusKeys() {
       PL.bindFocusKeys({
@@ -3134,7 +3284,8 @@ ${PL.FOCUS_DOCK_CSS}
             this.settings.learning.shortcutCodes,
             () => this.overlay?.isTyping() ?? !1,
           ),
-          this.bindFocusKeys())
+          this.bindFocusKeys(),
+          this.bindRangeKeys())
         : (this.unbindKeys(), this.practice?.reset());
     }
     unbindKeys() {
@@ -3143,6 +3294,8 @@ ${PL.FOCUS_DOCK_CSS}
     teardownPlayback() {
       (this.autoPause?.destroy(),
         (this.autoPause = null),
+        this.rangeLoop?.destroy(),
+        (this.rangeLoop = null),
         this.unbindKeys(),
         this.lookup?.dispose(),
         (this.lookup = null),
